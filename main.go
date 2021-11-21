@@ -1,128 +1,68 @@
 package main
 
 import (
-	"log"
-	"net/http"
-	"time"
-
 	"github.com/appleboy/gin-jwt/v2"
 	"github.com/gin-gonic/gin"
+	"log"
+	"net/http"
+	"pgd/controller/notice"
+	"pgd/controller/order"
+	"pgd/controller/user"
 )
 
 type login struct {
-	Username string `form:"username" json:"username" binding:"required"`
-	Password string `form:"password" json:"password" binding:"required"`
+	ID       string `form:"id" json:"id" binding:"required"`
+	Password string `form:"pwd" json:"pwd" binding:"required"`
 }
 
 var identityKey = "id"
 
-func helloHandler(c *gin.Context) {
-	claims := jwt.ExtractClaims(c)
-	user, _ := c.Get(identityKey)
-	c.JSON(200, gin.H{
-		"userID":   claims[identityKey],
-		"userName": user.(*User).UserName,
-		"text":     "Hello World.",
-	})
-}
-
-// User demo
-type User struct {
-	UserName  string
-	FirstName string
-	LastName  string
-}
-
 func main() {
+	gin.ForceConsoleColor()
+
 	r := gin.New()
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 
-	// the jwt middleware
-	authMiddleware, err := jwt.New(&jwt.GinJWTMiddleware{
-		Realm:       "test zone",
-		Key:         []byte("secret key"),
-		Timeout:     time.Hour,
-		MaxRefresh:  time.Hour,
-		IdentityKey: identityKey,
-		PayloadFunc: func(data interface{}) jwt.MapClaims {
-			if v, ok := data.(*User); ok {
-				return jwt.MapClaims{
-					identityKey: v.UserName,
-				}
-			}
-			return jwt.MapClaims{}
-		},
-		IdentityHandler: func(c *gin.Context) interface{} {
-			claims := jwt.ExtractClaims(c)
-			return &User{
-				UserName: claims[identityKey].(string),
-			}
-		},
-		Authenticator: func(c *gin.Context) (interface{}, error) {
-			var loginVals login
-			if err := c.ShouldBind(&loginVals); err != nil {
-				return "", jwt.ErrMissingLoginValues
-			}
-			userID := loginVals.Username
-			password := loginVals.Password
-
-			if (userID == "admin" && password == "admin") || (userID == "test" && password == "test") {
-				return &User{
-					UserName:  userID,
-					LastName:  "Bo-Yi",
-					FirstName: "Wu",
-				}, nil
-			}
-
-			return nil, jwt.ErrFailedAuthentication
-		},
-		Authorizator: func(data interface{}, c *gin.Context) bool {
-			if v, ok := data.(*User); ok && v.UserName == "admin" {
-				return true
-			}
-			return false
-		},
-		// TokenLookup is a string in the form of "<source>:<name>" that is used
-		// to extract token from the request.
-		// Optional. Default value "header:Authorization".
-		// Possible values:
-		// - "header:<name>"
-		// - "query:<name>"
-		// - "cookie:<name>"
-		// - "param:<name>"
-		TokenLookup: "header: Authorization, query: token, cookie: jwt",
-		// TokenLookup: "query:token",
-		// TokenLookup: "cookie:token",
-
-		// TokenHeadName is a string in the header. Default value is "Bearer"
-		TokenHeadName: "Bearer",
-
-		// TimeFunc provides the current time. You can override it to use another time value. This is useful for testing or if your server uses a different time zone than your tokens.
-		TimeFunc: time.Now,
-	})
-
+	authMiddleware, err := middleware()
 	if err != nil {
-		log.Fatal("JWT Error:" + err.Error())
+		log.Fatal("JWT 错误:" + err.Error())
 	}
 
 	r.POST("/login", authMiddleware.LoginHandler)
+	r.POST("/register", user.Register)
+	r.GET("/refresh_token", authMiddleware.RefreshHandler)
 
 	r.NoRoute(authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
 		claims := jwt.ExtractClaims(c)
 		log.Printf("NoRoute claims: %#v\n", claims)
 		c.JSON(404, gin.H{"code": "PAGE_NOT_FOUND", "message": "Page not found"})
 	})
+	r.Use(authMiddleware.MiddlewareFunc())
 
-	auth := r.Group("/auth")
-	// Refresh time can be longer than token timeout
-	auth.GET("/refresh_token", authMiddleware.RefreshHandler)
-	auth.Use(authMiddleware.MiddlewareFunc())
+	noticeGroup := r.Group("/notice") //通知
 	{
-		auth.GET("/hello", helloHandler)
+		noticeGroup.POST("", notice.New)
+		noticeGroup.DELETE("", notice.Delete)
+		noticeGroup.GET("", notice.List)
 	}
 
-	if err := http.ListenAndServe(":"+"8080", r); err != nil {
+	orderGroup := r.Group("/order")
+
+	orderGroup.Use(order.Handler)
+	{
+		orderGroup.GET("", order.Detail)            //订单详情
+		orderGroup.GET("/can_receive", order.List)  //可接订单列表
+		orderGroup.GET("/receive_list", order.List) //我接的单
+		orderGroup.GET("/list", order.List)         //我下的单
+		orderGroup.POST("", order.New)              //下单
+		orderGroup.PUT("/receive", order.Receive)   //接单
+		orderGroup.DELETE("/", order.Delete)        //删除订单
+		orderGroup.PUT("/complete", order.Complete) //确认完成
+		orderGroup.PUT("/cancel", order.Cancel)     //取消接单
+	}
+
+	if err := http.ListenAndServe(":9090", r); err != nil {
 		log.Fatal(err)
 	}
 }
