@@ -1,0 +1,12 @@
+version = 1
+
+[[analyzers]]
+name = "go"
+enabled = true
+
+  [analyzers.meta]
+  import_root = "github.com/lyj0309/pgd-server"
+
+[[analyzers]]
+name = "test-coverage"
+enabled = true
