@@ -43,14 +43,15 @@ func init() {
 	DB, err = gorm.Open(mysql.Open(Settings["mysql_dsn_local"].(string)), &gorm.Config{PrepareStmt: true}) //Logger: logger.Discard,
 
 	wc := wechat.NewWechat()
-	redisOpts := &cache.RedisOpts{
-		Host:        Settings["redis_addr"].(string),
-		Database:    0,
-		MaxActive:   10,
-		MaxIdle:     10,
-		IdleTimeout: 60, //second
-	}
-	redisCache := cache.NewRedis(redisOpts)
+	//redisOpts := &cache.RedisOpts{
+	//	Host:        Settings["redis_addr"].(string),
+	//	Database:    0,
+	//	MaxActive:   10,
+	//	MaxIdle:     10,
+	//	IdleTimeout: 60, //second
+	//}
+	//redisCache := cache.NewRedis(redisOpts)
+	redisCache := cache.NewMemory()
 
 	OfficialAccount = wc.GetOfficialAccount(&offConfig.Config{
 		AppID:          Settings["off_app_id"].(string),

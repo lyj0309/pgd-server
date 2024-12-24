@@ -62,7 +62,7 @@ func main() {
 		orderGroup.PUT("/cancel", order.Cancel)     //取消接单
 	}
 
-	if err := http.ListenAndServe(":9090", r); err != nil {
+	if err := http.ListenAndServe("0.0.0.0:9000", r); err != nil {
 		log.Fatal(err)
 	}
 }
